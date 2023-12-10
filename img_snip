@@ -1,0 +1,118 @@
+make_crop_labels.py
+# Example usage: 
+# python make_crop_labels.py --input_path data/images --output_path --data/cropped_images --csv_path data/crops.csv
+
+# Controls:
+# scroll to change crop size, mouse to aim the crop, left click to crop image and move to next, x to skip to the next image.
+
+# The script is pretty messy since I quickly hacked it together with little regard for quality, but it works.
+
+import pygame
+import argparse
+import shutil
+import os
+import argparse
+import pandas as pd
+
+def load_image(path):
+    return pygame.image.load(path).convert()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_path', type=str, required=True)
+    parser.add_argument('--csv_path', type=str, required=True)
+    parser.add_argument('--output_path', type=str, required=True)
+    args = parser.parse_args()
+
+    screen_width = 512
+    screen_height = 512
+    rect_width = 128
+    rect_height = 128
+    base_rect_width = 128
+    base_rect_height = 128
+    lowest_resolution_crop = 128
+    highest_resolution_crop = 512
+    rect_multiplier_min = lowest_resolution_crop/base_rect_width
+    rect_multiplier_max = highest_resolution_crop/base_rect_width
+    rect_multiplier = 1.0
+    scroll_multiplier = 0.3
+    pygame.init()
+    screen = pygame.display.set_mode([screen_width, screen_height])
+    rect_surface = pygame.Surface([screen_width, screen_height], pygame.SRCALPHA)
+    pygame.display.set_caption('data filter')
+
+    input_path = args.input_path
+    input_list = os.listdir(input_path)
+    output_path = args.output_path
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    def get_current_input_path():
+        return os.path.join(input_path, input_list[current_image_id])
+    
+    def get_current_output_path():
+        return os.path.join(output_path, input_list[current_image_id])
+
+    current_image_id = 0
+    current_input_path = get_current_input_path()
+    current_image = load_image(current_input_path)
+
+    running = True
+    all_crops = []
+    while True:
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                running = False
+                break
+            if event.type == pygame.MOUSEWHEEL:
+                rect_multiplier += event.y * scroll_multiplier
+                if rect_multiplier > rect_multiplier_max:
+                    rect_multiplier = rect_multiplier_max
+                elif rect_multiplier < rect_multiplier_min:
+                    rect_multiplier = rect_multiplier_min
+                rect_width = int(base_rect_width * rect_multiplier)
+                rect_height = int(base_rect_height * rect_multiplier)
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    crop_left = mouse_x-(rect_width//2)
+                    crop_top = mouse_y-(rect_height//2)
+                    crop_right = crop_left + rect_width
+                    crop_bottom = crop_top + rect_height
+                    crop_bounds = [
+                        [crop_left/screen_width, crop_top/screen_height], 
+                        [crop_right/screen_width, crop_bottom/screen_height]
+                    ]
+                    all_crops.append(
+                        {'file_name': get_current_output_path(), 'crop': crop_bounds}
+                    )
+                    shutil.copy(current_input_path, get_current_output_path())
+                    print(all_crops[-1])
+                    current_image_id += 1
+                    current_input_path = get_current_input_path()
+                    current_image = load_image(current_input_path)
+                    df = pd.DataFrame(all_crops)
+                    df.to_csv(args.csv_path)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_x:
+                    current_image_id += 1
+                    current_input_path = get_current_input_path()
+                    current_image = load_image(current_input_path)
+
+        if running == False:
+            break
+
+        screen.fill([0, 0, 0])
+        screen.blit(current_image, (0,0))
+        crop_rect = pygame.Rect(
+            mouse_x-(rect_width//2), mouse_y-(rect_height//2), rect_width, rect_height
+        )
+        rect_surface.fill([0, 0, 0, 0])
+        pygame.draw.rect(rect_surface, (255, 0, 0, 125), crop_rect)
+        screen.blit(rect_surface, (0,0))
+        pygame.display.flip()
+        pygame.time.delay(20)
+
+if __name__ == '__main__':
+    main()
