@@ -21,7 +21,7 @@ def lorenz_system(current_state, t):
 initial_state = [-8, 8, 27]
 
 # Time points
-t = np.linspace(0, 50, num=10000)
+t = np.linspace(0, 50, num=5000)
 
 # Solve the differential equations
 solution = odeint(lorenz_system, initial_state, t)
