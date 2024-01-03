@@ -10,59 +10,64 @@ class CustomGraphWidget(pg.GraphicsLayoutWidget):
         timer.stop()  # Stop the timer
         app.quit()  # Quit the application
 
-# Constants
-WAVELENGTH_MIN = 1e-9  # 1 nanometer
-WAVELENGTH_MAX = 1e-7  # 100 micrometers
-Y_MAX = 100  # 100%
-Y_MIN = 0    # 0%
-SPIKE_INTERVAL = 10e-10  # 500 nanometers
-UPDATE_INTERVAL_MS = 1  # 100 milliseconds
-MAJOR_SPIKE_PROBABILITY = 0.005  # Probability of a major spike
-NORMAL_Y_MAX = 30  # 5% for normal data
-MAJOR_SPIKE_Y_MIN = 70  # 60% minimum for major spikes
-MAJOR_SPIKE_Y_MAX = 100  # 80% maximum for major spikes
+# Constants for the plot
+WAVELENGTH_MIN = 600  # Min wavenumber in cm-1
+WAVELENGTH_MAX = 4000  # Max wavenumber in cm-1
+SPIKE_INTERVAL = 1  # 1 cm-1 interval between points
+UPDATE_INTERVAL_MS = 1  # 1 ms update rate
 
-# Initialize wavelengths
-wavelengths = np.arange(WAVELENGTH_MIN, WAVELENGTH_MAX, SPIKE_INTERVAL)
+# Initialize wavenumbers
+wavenumbers = np.arange(WAVELENGTH_MIN, WAVELENGTH_MAX, SPIKE_INTERVAL)
+values = np.zeros(len(wavenumbers))
 
-# Initialize values
-values = np.random.uniform(Y_MIN, NORMAL_Y_MAX, len(wavelengths))
+# Gas peak wavenumbers (for example purposes, use actual values for real gases)
+gas_peaks = {
+    'CO2': 2340,
+    'Water': 3700,
+    'Methane': 3020,
+    # Add other gases and their peak wavenumbers here
+}
 
 # Create the PyQtGraph application
 app = QtWidgets.QApplication([])
-win = CustomGraphWidget(show=True, title="Real Time Plot")
+win = CustomGraphWidget(show=True, title="Simulated Gas Spectrograph")
 plot = win.addPlot(title="Real Time Data")
-curve = plot.plot(wavelengths, values, pen='y')
+curve = plot.plot(wavenumbers, values, pen='y')
 
 # Set fixed y-axis range
-plot.setYRange(Y_MIN, Y_MAX)
+plot.setYRange(0, 1.5)
 
+# Timer and update function
 def update():
-    global values
-    # Normal random changes for all values
-    normal_values = np.random.uniform(Y_MIN, NORMAL_Y_MAX, len(wavelengths))
+    # Create baseline noise
+    noise = np.random.normal(0, 0.02, len(wavenumbers))
+    
+    # Reset values to noise for each update
+    values[:] = noise
+    
+    # Add random peaks at gas wavenumbers
+    for gas, peak in gas_peaks.items():
+        if np.random.random() < 0.05:  # 5% chance to simulate a gas peak
+            peak_width = np.random.randint(10, 30)  # Random peak width
+            peak_height = np.random.uniform(0.1, 1.5)  # Random peak height
+            peak_start = peak - peak_width // 2
+            peak_end = peak + peak_width // 2
+            peak_range = np.arange(peak_start, peak_end)
+            values[peak_range] = peak_height
 
-    # Introduce major spikes with a small probability
-    for i in range(len(wavelengths)):
-        if np.random.uniform(0, 1) < MAJOR_SPIKE_PROBABILITY:
-            normal_values[i] = np.random.uniform(MAJOR_SPIKE_Y_MIN, MAJOR_SPIKE_Y_MAX)
-
-    # Update values
-    values = normal_values
-
-    # Update line plot
-    curve.setData(wavelengths, values)
+    # Update the plot
+    curve.setData(wavenumbers, values)
 
 timer = QtCore.QTimer()
 timer.timeout.connect(update)
 timer.start(UPDATE_INTERVAL_MS)
 
+# Start listening for resume command in a separate thread
 def listen_for_resume():
     while input() != 'resume':
         pass
     timer.start()
 
-# Start listening for resume command in a separate thread
 listen_thread = threading.Thread(target=listen_for_resume, daemon=True)
 listen_thread.start()
 
